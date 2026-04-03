@@ -83,23 +83,7 @@ and paste your key.
 
 ---
 
-### 5. Example PR Comment
 
-```
-###  Groq PR Review & Optimization
-
-File: src/utils/helpers.js
--  Suggestion: Consider caching results of expensive computations to improve performance.
-- Warning: Potential null reference when input is undefined; add validation.
--  New Feature Idea: Add optional logging parameter for debugging purposes.
-
----
-
-File: src/components/Button.jsx
--  Suggestion: Use memoization to prevent unnecessary re-renders.
-```
-
----
 
 ## Reusable Workflow Contents (groq-pr-review.yml)
 
