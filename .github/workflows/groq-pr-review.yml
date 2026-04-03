@@ -22,13 +22,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Fetch PR Diff
+      - name: Fetch Clean PR Diff
         run: |
-          git fetch origin main
-          # Split diff per file to avoid huge token issues
-          git diff origin/main...HEAD > full_diff.txt
+          # 1. Fetch the exact base branch (usually 'main')
+          git fetch origin ${{ github.base_ref }}:base_branch
+          
+          # 2. Get a CLEAN diff comparing ONLY your PR changes to the base
+          git diff base_branch...HEAD \
+            --unified=3 \
+            --ignore-all-space \
+            -- ":(exclude)package-lock.json" ":(exclude)*.lock" > full_diff.txt
+          
+          # 3. Split the clean diff into files
           csplit -s -z -f diff_ full_diff.txt '/^diff --git/' '{*}' || true
-          echo "Generated diff files:"
+          echo "Generated clean diff files:"
           ls diff_*
 
       - name: AI Review via Groq
