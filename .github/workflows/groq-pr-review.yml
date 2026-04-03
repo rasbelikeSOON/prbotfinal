@@ -1,4 +1,4 @@
-name: Groq PR Review Bot
+name: Groq PR Reviewer Bot
 
 on:
   workflow_call:
@@ -17,67 +17,57 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          # Pull from fork or main repo correctly
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Fetch Clean PR Diff
         run: |
-          # 1. Fetch the exact base branch (usually 'main')
           git fetch origin ${{ github.base_ref }}:base_branch
-          
-          # 2. Get a CLEAN diff comparing ONLY your PR changes to the base
           git diff base_branch...HEAD \
             --unified=3 \
             --ignore-all-space \
             -- ":(exclude)package-lock.json" ":(exclude)*.lock" > full_diff.txt
-          
-          # 3. Split the clean diff into files
           csplit -s -z -f diff_ full_diff.txt '/^diff --git/' '{*}' || true
-          echo "Generated clean diff files:"
-          ls diff_*
 
-      - name: AI Review via Groq
+      - name: Groq Analysis & Optimization
         id: review
         run: |
           mkdir -p reviews
           for f in diff_*; do
-            # Skip empty files
             [ -s "$f" ] || continue
-            
-            # Limit diff size to first 4000 characters per file
             CONTENT=$(head -c 4000 "$f" | jq -Rs .)
             
-            # API call with latest llama-3.3 model
             RESPONSE=$(curl -s https://api.groq.com/openai/v1/chat/completions \
               -H "Authorization: Bearer ${{ secrets.GROQ_API_KEY }}" \
               -H "Content-Type: application/json" \
               -d "{
                 \"model\": \"llama-3.3-70b-versatile\",
                 \"messages\": [
-                  {\"role\": \"system\", \"content\": \"You are a code reviewer. For each hunk, provide: type (bug/warning/suggestion), file, and concise comments.\"},
+                  {
+                    \"role\": \"system\", 
+                    \"content\": \"You are a senior developer and code architect. Review this diff for: 1. Logic bugs and security risks. 2. Performance optimizations. 3. New feature ideas. Be concise but insightful.\"
+                  },
                   {\"role\": \"user\", \"content\": $CONTENT}
                 ]
               }")
             
-            # Extract content or error
             REVIEW=$(echo $RESPONSE | jq -r '.choices[0].message.content' 2>/dev/null || echo "null")
             
             if [ "$REVIEW" == "null" ] || [ "$REVIEW" == "" ]; then
               ERROR_MSG=$(echo $RESPONSE | jq -r '.error.message' 2>/dev/null || echo "Unknown API Error")
-              echo " **Groq API Error on file $(head -n 1 $f):** $ERROR_MSG" > "reviews/$f.txt"
+              echo " **Groq Error on file $(head -n 1 $f | cut -d' ' -f3):** $ERROR_MSG" > "reviews/$f.txt"
             else
               echo "$REVIEW" > "reviews/$f.txt"
             fi
           done
 
-      - name: Aggregate Comments
+      - name: Aggregate Feedback
         id: aggregate
         run: |
           {
             echo 'comment<<EOF'
-            echo "###  Groq AI Review"
+            echo " Groq PR Review & Optimization"
             for r in reviews/*.txt; do
               echo ""
               cat "$r"
@@ -87,7 +77,7 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Post Review Comment
+      - name: Post Feedback Comment
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: ${{ steps.aggregate.outputs.comment }}
