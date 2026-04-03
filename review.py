@@ -80,4 +80,4 @@ if __name__ == "__main__":
     review = review_code(diff)
     post_review(review)
 
-    print("Review posted successfully!")
+print("Review posted successfully!")
