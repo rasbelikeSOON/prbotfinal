@@ -14,9 +14,10 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout PR Code
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
+          # Pull from fork or main repo correctly
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
@@ -41,17 +42,19 @@ jobs:
             # Limit diff size to first 4000 characters per file
             CONTENT=$(head -c 4000 "$f" | jq -Rs .)
             
+            # API call with latest llama-3.3 model
             RESPONSE=$(curl -s https://api.groq.com/openai/v1/chat/completions \
               -H "Authorization: Bearer ${{ secrets.GROQ_API_KEY }}" \
               -H "Content-Type: application/json" \
               -d "{
-                \"model\": \"llama3-70b-8192\",
+                \"model\": \"llama-3.3-70b-versatile\",
                 \"messages\": [
                   {\"role\": \"system\", \"content\": \"You are a code reviewer. For each hunk, provide: type (bug/warning/suggestion), file, and concise comments.\"},
                   {\"role\": \"user\", \"content\": $CONTENT}
                 ]
               }")
             
+            # Extract content or error
             REVIEW=$(echo $RESPONSE | jq -r '.choices[0].message.content' 2>/dev/null || echo "null")
             
             if [ "$REVIEW" == "null" ] || [ "$REVIEW" == "" ]; then
