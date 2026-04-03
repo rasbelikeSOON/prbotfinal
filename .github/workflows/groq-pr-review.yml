@@ -66,7 +66,7 @@ jobs:
             
             if [ "$REVIEW" == "null" ] || [ "$REVIEW" == "" ]; then
               ERROR_MSG=$(echo $RESPONSE | jq -r '.error.message' 2>/dev/null || echo "Unknown API Error")
-              echo "⚠️ **Groq API Error on file $(head -n 1 $f):** $ERROR_MSG" > "reviews/$f.txt"
+              echo " **Groq API Error on file $(head -n 1 $f):** $ERROR_MSG" > "reviews/$f.txt"
             else
               echo "$REVIEW" > "reviews/$f.txt"
             fi
@@ -77,7 +77,7 @@ jobs:
         run: |
           {
             echo 'comment<<EOF'
-            echo "### 🤖 Groq AI Review"
+            echo "###  Groq AI Review"
             for r in reviews/*.txt; do
               echo ""
               cat "$r"
