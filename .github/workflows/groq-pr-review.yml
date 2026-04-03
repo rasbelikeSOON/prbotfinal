@@ -22,6 +22,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch Clean PR Diff
+        id: fetch_diff
         run: |
           # 1. Fetch the exact base branch (usually 'main')
           git fetch origin ${{ github.base_ref }}:base_branch
@@ -32,18 +33,27 @@ jobs:
             --ignore-all-space \
             -- ":(exclude)package-lock.json" ":(exclude)*.lock" ":(exclude).github/*" > full_diff.txt
           
-          # 3. Split the clean diff into files
+          # 3. SAFETY CHECK: If the diff is empty, stop the review gracefully
+          if [ ! -s full_diff.txt ]; then
+            echo "No application code changes found. Skipping AI review."
+            echo "has_diff=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 4. Split the clean diff into files
           csplit -s -z -f diff_ full_diff.txt '/^diff --git/' '{*}' || true
-          echo "Generated clean diff files (Excluding .github):"
-          ls diff_*
+          echo "has_diff=true" >> $GITHUB_OUTPUT
+          echo "Generated clean diff files:"
+          ls diff_* || echo "No diff files created."
 
       - name: Groq Analysis & Optimization
+        if: steps.fetch_diff.outputs.has_diff == 'true'
         id: review
         run: |
           mkdir -p reviews
           for f in diff_*; do
-            # Skip empty files
-            [ -s "$f" ] || continue
+            # Skip empty files or non-existent hits
+            [ -f "$f" ] && [ -s "$f" ] || continue
             
             CONTENT=$(head -c 4000 "$f" | jq -Rs .)
             
@@ -55,7 +65,7 @@ jobs:
                 \"messages\": [
                   {
                     \"role\": \"system\", 
-                    \"content\": \"You are a senior developer and code architect. Review this diff for: 1. Logic bugs and security risks. 2. Performance optimizations. 3. New feature ideas. Focus ONLY on the application source code. Ignore configuration or workflow files.\"
+                    \"content\": \"You are a senior developer and code architect. Review this diff for: 1. Logic bugs and security risks. 2. Performance optimizations. 3. New feature ideas. Focus ONLY on application source code.\"
                   },
                   {\"role\": \"user\", \"content\": $CONTENT}
                 ]
@@ -72,6 +82,7 @@ jobs:
           done
 
       - name: Aggregate Feedback
+        if: steps.fetch_diff.outputs.has_diff == 'true'
         id: aggregate
         run: |
           {
@@ -87,6 +98,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Post Feedback Comment
+        if: steps.fetch_diff.outputs.has_diff == 'true'
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: ${{ steps.aggregate.outputs.comment }}
